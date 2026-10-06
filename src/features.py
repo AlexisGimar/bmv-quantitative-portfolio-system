@@ -27,6 +27,26 @@ def calculate_features(prices):
         .copy()
     )
 
+    data["date"] = pd.to_datetime(data["date"], errors="raise")
+    if data["date"].isna().any() or data.duplicated(["asset_id", "date"]).any():
+        raise ValueError("Prices need valid, unique dates for each asset.")
+
+    price_columns = ["adjusted_close"]
+    if "close" in data.columns:
+        price_columns.append("close")
+    for column in price_columns + ["volume"]:
+        data[column] = pd.to_numeric(data[column], errors="coerce")
+    valid_prices = (np.isfinite(data[price_columns]) & data[price_columns].gt(0)).all(axis=1)
+    valid_volume = np.isfinite(data["volume"]) & data["volume"].ge(0)
+    data["invalid_observation"] = ~(valid_prices & valid_volume)
+    data.loc[data["invalid_observation"], "adjusted_close"] = np.nan
+
+    # A bad observation keeps this asset out until it leaves the 252-row window.
+    data["invalid_history_252d"] = (
+        data.groupby("asset_id")["invalid_observation"]
+        .transform(lambda x: x.rolling(252, min_periods=1).sum())
+    )
+
     # -----------------------------------------------------
     # Daily returns
     # -----------------------------------------------------

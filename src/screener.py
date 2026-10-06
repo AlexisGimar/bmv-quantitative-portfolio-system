@@ -62,14 +62,19 @@ def build_universe(
     volatility_weight=1/3,
     drawdown_weight=1/3,
     freshness_limits=None,
-    max_zero_volume_rate=0.50
+    max_zero_volume_rate=0.50,
+    rejections=None
 ):
     """
     Build the eligible and scored cross-sectional universe
     at a specific historical evaluation date.
 
-    Only information available up to evaluation_date is used.
+    Features are sliced through evaluation_date. Provider history may be revised.
     """
+
+    if not all(np.isfinite(w) and w >= 0 for w in
+               [momentum_weight, volatility_weight, drawdown_weight]):
+        raise ValueError("Score weights must be finite and nonnegative.")
 
     weight_sum = (
         momentum_weight
@@ -156,6 +161,16 @@ def build_universe(
         latest["extreme_return_60d"]
         == 0
     )
+
+    if "invalid_history_252d" in latest.columns:
+        latest["data_quality_ok"] &= latest["invalid_history_252d"].eq(0)
+    if "pending_rejections" in latest.columns:
+        # Current screener only: this count describes today's unresolved issues.
+        latest["data_quality_ok"] &= latest["pending_rejections"].eq(0)
+    if rejections is not None:
+        # Historical screening: never apply a rejection from a future market date.
+        dated = rejections[rejections["date"] <= evaluation_date]
+        latest["data_quality_ok"] &= ~latest["asset_id"].isin(dated["asset_id"])
 
     # -----------------------------------------------------
     # Liquidity

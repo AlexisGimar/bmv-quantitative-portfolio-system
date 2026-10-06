@@ -107,3 +107,15 @@ ADD COLUMN IF NOT EXISTS
 ALTER TABLE public.prices
 ADD COLUMN IF NOT EXISTS
     quality_flags TEXT NOT NULL DEFAULT '';
+
+-- Older rejection tables did not store the provider symbol.
+ALTER TABLE public.price_rejections
+ADD COLUMN IF NOT EXISTS yahoo_symbol TEXT;
+
+UPDATE public.price_rejections AS r
+SET yahoo_symbol = a.yahoo_symbol
+FROM public.assets AS a
+WHERE r.asset_id = a.asset_id AND r.yahoo_symbol IS NULL;
+
+CREATE INDEX IF NOT EXISTS price_rejections_asset_date_idx
+ON public.price_rejections (asset_id, date);

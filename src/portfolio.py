@@ -24,7 +24,15 @@ def calculate_portfolio_weights(
         are proportional to positive score divided by volatility.
     """
 
+    allowed = {"equal", "category_inverse_volatility", "category_score_volatility"}
+    if method not in allowed:
+        raise ValueError(f"Unknown weighting method: {method}")
     data = candidates.copy()
+    data["weight"] = 0.0
+    if data["asset_id"].duplicated().any():
+        raise ValueError("Each candidate must appear only once.")
+    if not data.empty and data["asset_type"].isna().any():
+        raise ValueError("Each candidate needs an asset category.")
 
     if data.empty:
         return data
@@ -92,6 +100,19 @@ def calculate_portfolio_weights(
     )
 
 
+    # If one category has unusable volatility or no positive signal,
+    # split its budget equally. Other category budgets stay unchanged.
+    data["equal_weight_fallback"] = False
+    for category, group in data.groupby("asset_type"):
+        valid_volatility = (
+            np.isfinite(group["volatility_20d_ann"])
+            & group["volatility_20d_ann"].gt(0)
+        ).all()
+        valid_signal = np.isfinite(group["weight_signal"]).all()
+        if not valid_volatility or not valid_signal or group["weight_signal"].sum() <= 0:
+            data.loc[group.index, "weight_signal"] = 1.0
+            data.loc[group.index, "equal_weight_fallback"] = True
+
     # -----------------------------------------------------
     # Weight inside each category
     # -----------------------------------------------------
@@ -118,5 +139,10 @@ def calculate_portfolio_weights(
         * data["within_category_weight"]
     )
 
+
+    if not (np.isfinite(data["weight"]).all()
+            and data["weight"].ge(0).all()
+            and np.isclose(data["weight"].sum(), 1.0)):
+        raise ValueError("Portfolio weights must be finite, nonnegative and sum to 1.")
 
     return data
