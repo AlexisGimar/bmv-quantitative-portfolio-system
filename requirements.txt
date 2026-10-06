@@ -1,0 +1,10 @@
+# Python 3.11 or later. Compatible ranges, not an exact dependency lock.
+pandas>=2.2,<3
+numpy>=1.26,<3
+SQLAlchemy>=2.0,<2.1
+psycopg2-binary>=2.9.9,<3
+python-dotenv>=1.0,<2
+yfinance>=0.2.54,<0.3
+jupyterlab>=4.2,<5
+ipykernel>=6.29,<7
+nbformat>=5.10,<6
